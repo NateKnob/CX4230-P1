@@ -1,83 +1,116 @@
 import random
 from collections import Counter
-from entities.humans import Person, Farmer
+from entities.humans import *
+from entities.occupation import *
 
-commodities = ["food", "stress"]
+min_food = 12
+good_food = 20
+
 
 class Village:
     def __init__(self, size=random.randint(10, 20)):
-        self.population = [Farmer() for i in range(size)]
-        self.wealth = Counter({"food": 200})
+        self.population = [PersonFactory.makeRandomPerson() for _ in range(size)]
+        self.area = size * 2
+        self.foodNeed = 3
+        self.wealth = Counter({"food": size * 100, "wood": size * 100, "gold": 0})
         self.metrics = Counter()
+        self.happiness = 70
 
-    def getAge(self):
-        return self.age
+    def _clean(self, reason):
+        before = len(self.population)
+        self.population = [person for person in self.population if person.isAlive()]
+        self.metrics["deaths_" + reason] += (before - len(self.population))
 
-    def work(self):
-        self.metrics = Counter()
+    def _work(self):
+        for person in self.population:
+            person.work(self)
 
-        harvest = Counter()
-        consumed = Counter()
+    def _feed(self):
+        needed_food = len(self.population) * good_food
+        if self.wealth['food'] >= needed_food:
+            if self.wealth['food'] >= 5 * needed_food:
+                self.foodNeed -= 1
+                self.foodNeed = max(self.foodNeed, 1)
+            else:
+                self.foodNeed += 1
+                self.foodNeed = min(self.foodNeed, 5)
+            ration = good_food
+            self.happiness += 2
+        else:
+            ration = self.wealth['food'] // len(self.population)
+            self.happiness -= 5
+            self.foodNeed += 2
+            self.foodNeed = min(self.foodNeed, 5)
 
-        for i, citizen in enumerate(reversed(self.population)):
-            consumption = citizen.eat(self)
-            for key in consumption:
-                if key in commodities:
-                    if self.wealth[key] + consumption[key] >= 0:
-                        self.wealth[key] += consumption[key]
-                    else:
-                        citizen.die()
-                        self.metrics["deaths"] += 1
-                else:
-                    self.metrics[key] += consumption[key]
-        self.population = [citizen for citizen in self.population if not citizen.isDead()]
+        for person in self.population:
+            actual_food = max(ration, min_food) + random.randint(-1, 1)
+            if self.wealth['food'] < actual_food:
+                person.die()
+            else:
+                self.wealth['food'] -= actual_food
+        self._clean("starve")
 
-        for i, citizen in enumerate(self.population):
-            product = citizen.work(self)
-            for key in product:
-                harvest[key] += product[key]
-            if "death" in product:
-                citizen.die()
-                self.metrics["deaths"] += 1
-        self.population = [citizen for citizen in self.population if not citizen.isDead()]
+    def _disease(self):
+        for person in self.population:
+            person.disease(self)
+        self._clean("plague")
 
-        for key in harvest:
-            if key in commodities:
-                self.wealth[key] += harvest[key]
-
-        if harvest["birth"] > 0:
-            for b in range(harvest["birth"]):
-                self.population.append(Farmer())
-                self.metrics["births"] += 1
-
-        print("Marrieds :", len(self.getMarrieds()))
-        print("Sick     :", len(self.getSickos()))
-        print("Births   :", self.metrics["births"])
-        print("Starved  :", self.metrics["deaths"])
-        print("Food     :", self.wealth["food"])
-
+    def _mingle(self):
         bm = self.getBachelors()
         bf = self.getBachelorettes()
         for i in range(min(len(bm), len(bf))):
             bm[i].marry(bf[i])
             bf[i].marry(bm[i])
 
-        return harvest
+    def _procreate(self):
+        births = 0
+        for person in self.population:
+            if person.procreate():
+                births += 1
+        for _ in range(births):
+            self.population.append(Person())
+
+    def _build(self):
+        if len(self.population) > self.area:
+            self.area += self.wealth['wood'] // 100
+            self.wealth['wood'] %= 100
+        else:
+            self.wealth['gold'] += self.wealth['wood'] // 2
+            self.wealth['wood'] -= self.wealth['wood'] // 2
+
+    def update(self):
+        self._work()
+        self._feed()
+        self._disease()
+        self._mingle()
+        self._procreate()
+        self._build()
+        self.happiness = min(max(0, self.happiness), 100)
+
+    def print_stats(self):
+        print("Population:", len(self.population))
+        print("Area     :", self.area)
+        print("Food Need:", self.foodNeed)
+        print("Adults   :", self.countAdults())
+        print("\tFarmers  :", len([p for p in self.population if type(p.occupation) == Farmer]))
+        print("\tWorkers  :", len([p for p in self.population if type(p.occupation) == Worker]))
+        print("Marrieds :", len(self.getMarrieds()))
+        print("Sick     :", len(self.getSickos()))
+        print("Starved  :", self.metrics["deaths_starve"])
+        print("Plague   :", self.metrics["deaths_plague"])
+        print("Food     :", self.wealth["food"])
+        print("Wood     :", self.wealth["wood"])
+        print("Gold     :", self.wealth["gold"])
+        print("Happiness:", self.happiness)
 
     def getPopStats(self):
-        olds = 0
-        youths = 0
-        adults = 0
-        sickos = 0
-        total = 0
-        for p in self.population:
-            total += 1
-            adults += p.isAdult()
-            youths += p.isYoung()
-            olds += p.isOld()
-            sickos += p.isSick()
-        return [olds, youths, adults, sickos, total,
-            self.wealth["food"], self.metrics["births"], self.metrics["deaths"], self.metrics["illDeaths"]]
+        # metrics = ["population", "adults", "farmers", "workers",
+        #            "married", "food", "wood", "gold", "starve",
+        #            "sick", "plague", "happiness"]
+        return [len(self.population), self.countAdults(), len([p for p in self.population if type(p.occupation) == Farmer]),
+                len([p for p in self.population if type(p.occupation) == Worker]), len(self.getMarrieds()),
+                self.wealth["food"], self.wealth["wood"], self.wealth["gold"], self.metrics["deaths_starve"],
+                len(self.getSickos()), self.metrics["deaths_plague"], self.happiness]
 
     def toString(self):
         s = ""
@@ -86,10 +119,10 @@ class Village:
         return s
 
     def getAdults(self):
-        return [p for p in self.population if p.isAdult() ]
+        return [p for p in self.population if p.isAdult()]
 
     def getMarrieds(self):
-        return [p for p in self.population if p.isMarried() ]
+        return [p for p in self.population if p.isMarried()]
 
     def getSickos(self):
         return [p for p in self.population if p.isSick()]
@@ -98,7 +131,7 @@ class Village:
         return len(self.getAdults())
 
     def getBachelors(self):
-        return [p for p in self.population if p.isAdult() and not p.isMarried() and p.isMale() ]
+        return [p for p in self.population if p.isAdult() and not p.isMarried() and p.isMale()]
 
     def getBachelorettes(self):
-        return [p for p in self.population if p.isAdult() and not p.isMarried() and p.isFemale() ]
+        return [p for p in self.population if p.isAdult() and not p.isMarried() and p.isFemale()]

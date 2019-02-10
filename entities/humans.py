@@ -1,5 +1,7 @@
 import random
 
+from entities.occupation import *
+
 youth = 3
 elder = 12
 birthChance = 0.5
@@ -13,47 +15,78 @@ sickRecovery = 3
 # 0 = female
 # 1 = male
 
+
 class Person:
-    def __init__(self, age=0):
+    def __init__(self, age=0, occupation=Unemployed()):
         self.age = age
         self.lifespan = random.randint(14, 18)
         self.partner = None
-        self.hunger = 1
+        self.occupation = occupation
         self.sex = random.randint(0, 1)
-        self.dead = False
+        self.alive = True
         self.sick = 0
 
-    def getAge(self):
-        return self.age
+    def work(self, village):
+        if self.isAdult():
+            occupation = Farmer() if random.randint(0, 5) < village.foodNeed else Worker()
+        else:
+            occupation = Unemployed()
+        self.occupation = occupation
+        self.occupation.work(village)
 
-    def getHunger(self):
-        return self.hunger
-
-    def eat(self, vilage):
-        consumption = { "food": -self.hunger }
+    def disease(self, village):
+        if random.random() < sickChance:
+            self.fallIll()
 
         if self.isSick():
             if random.random() < illKillChance:
                 self.die()
-                consumption["illDeaths"] = 1
+                village.metrics["illDeaths"] += 1
             else:
                 self.sick += 1
                 if self.sick > sickRecovery:
                     self.sick = -1
-        if random.random() < sickChance:
-            self.fallIll()
 
-        return consumption
+        crowding = len(village.population) / village.area
+        if random.random() < infectionChance * crowding:
+            self.infect(village.population[random.randint(0, len(village.population) - 1)])
 
-    def work(self, village):
+    def procreate(self):
+        if self.isMarried() and not self.isOld() \
+                and self.isFemale() and random.random() < birthChance:
+            return True
+
         self.age += 1
-        product = { "stress": 1 }
         if self.age > self.lifespan:
             self.die()
-        if self.isMarried() and not self.isOld() and self.isMarried() and self.isFemale() and random.random() < birthChance:
-            product["birth"] = 1
 
-        return product
+    def getAge(self):
+        return self.age
+    def isYoung(self):
+        return self.age <= youth
+    def isAdult(self):
+        return self.age > youth
+    def isOld(self):
+        return self.age >= elder
+    def isMarried(self):
+        return self.partner != None
+    def marry(self, partner):
+        self.partner = partner
+    def isMale(self):
+        return self.sex == 1
+    def isFemale(self):
+        return self.sex == 0
+    def isAlive(self):
+        return self.alive
+    def die(self):
+        self.alive = False
+    def isSick(self):
+        return self.sick > 0
+    def fallIll(self):
+        if self.sick == 0:
+            self.sick = 1
+    def infect(self, friend):
+        friend.fallIll()
 
     def toString(self):
         if self.age <= youth:
@@ -62,57 +95,24 @@ class Person:
             return ")"
         elif self.isMarried():
             return "%"
-        # if self.isSick():
-        #     return str(self.sick)
-        # if self.sick == -1:
-        #     return "T"
-
         return "|"
 
-    def isYoung(self):
-        return self.age <= youth
 
-    def isAdult(self):
-        return self.age > youth
+class PersonFactory:
+    def __init__(self):
+        pass
 
-    def isOld(self):
-        return self.age >= elder
+    @staticmethod
+    def makeRandomWorker():
+        age = random.randint(3, 12)
+        occupation = Farmer() if random.randint(0, 1) > 0 else Worker()
+        return Person(age, occupation)
 
-    def isMarried(self):
-        return self.partner != None
-
-    def marry(self, partner):
-        self.partner = partner
-
-    def isMale(self):
-        return self.sex == 1
-
-    def isFemale(self):
-        return self.sex == 0
-
-    def isDead(self):
-        return self.dead
-
-    def die(self):
-        self.dead = True
-
-    def isSick(self):
-        return self.sick > 0
-
-    def fallIll(self):
-        if (self.sick == 0):
-            self.sick = 1
-
-    def infect(self, friend):
-        if random.random() < infectionChance:
-            friend.fallIll()
-
-class Farmer(Person):
-    def __init__(self, age=0):
-        super().__init__(age)
-
-    def work(self, village):
-        product = super().work(village)
-        if (self.isAdult() and not self.isOld()):
-            product["food"] = 2
-        return product
+    @staticmethod
+    def makeRandomPerson():
+        age = random.randint(0, 18)
+        if age > youth and age < elder:
+            occupation = Farmer() if random.randint(0, 2) > 0 else Worker()
+        else:
+            occupation = Unemployed()
+        return Person(age, occupation)
