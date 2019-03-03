@@ -44,5 +44,3 @@ class Soldier(Occupation):
 
     def fight(self, village):
         pass
-
-

@@ -4,10 +4,10 @@ from entities.occupation import *
 
 youth = 3
 elder = 12
-birthChance = 0.5
+birthChance = 0.6
 
 sickChance = 0.02
-infectionChance = 0.8
+infectionChance = 0.6
 illKillChance = 0.2
 sickRecovery = 3
 
@@ -35,7 +35,7 @@ class Person:
         self.occupation.work(village)
 
     def disease(self, village):
-        if random.random() < sickChance:
+        if random.random() < sickChance * village.crowding:
             self.fallIll()
 
         if self.isSick():
@@ -47,9 +47,11 @@ class Person:
                 if self.sick > sickRecovery:
                     self.sick = -1
 
-        crowding = len(village.population) / village.area
-        if random.random() < infectionChance * crowding:
-            self.infect(village.population[random.randint(0, len(village.population) - 1)])
+        neighbors = village.getNeighbors(self)
+        for neighbor in neighbors:
+            if random.random() < infectionChance * village.crowding:
+                #print("infected")
+                self.infect(neighbor[2])
 
     def procreate(self):
         if self.isMarried() and not self.isOld() \
@@ -89,13 +91,25 @@ class Person:
         friend.fallIll()
 
     def toString(self):
-        if self.age <= youth:
-            return "v"
+        s = ""
+
+        if self.sick > 0:
+            s += "$"
+        elif self.age <= youth:
+            s += "v"
         elif self.age >= elder:
-            return ")"
+            s += ")"
         elif self.isMarried():
-            return "%"
-        return "|"
+            s += "+"
+        else:
+            s += "|"
+        #s += str(self.sick)
+        return s
+
+    def __str__(self):
+        return self.toString()
+    def __unicode__(self):
+        return self.toString()
 
 
 class PersonFactory:

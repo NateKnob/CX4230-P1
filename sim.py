@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 
 def main():
-    random.seed(420)
+    random.seed(20180210)
     map = [[0 for _ in range(10)] for _ in range(10)]
     v = Village(30)
     map[3][4] = v
@@ -14,26 +14,33 @@ def main():
 
     popStats = [[] for v in villages]
 
-    for _t in range(70):
-        renderMap(map)
+    for _t in range(200):
+        # renderMap(map)
+        print(_t)
 
         for i, v in enumerate(villages):
-            print(v.toString())
+            # print(v.toString())
             # v.print_stats()
+            # print("-----------------------------------------------\n")
             v.update()
-            print("-----------------------------------------------\n")
+            time.sleep(0.05)
             popStats[i].append(v.getPopStats())
-        time.sleep(0.1)
+            print(v.toString())
+        # time.sleep(0.01)
 
     for i, v in enumerate(villages):
         popStats[i] = np.asarray(popStats[i])
-        print(popStats[i].shape)
+        # print(popStats[i].shape)
     metrics = ["population", "adults", "farmers", "workers",
-               "married", "food", "wood", "gold", "starve",
-               "sick", "plague", "happiness"]
+               "married", "food", "wood", "gold",
+               "starve", "sick", "plague", "happiness"]
     plt.figure()
     for i in range(len(metrics)):
-        plt.plot(popStats[0][:, i], label=metrics[i])
+        label = metrics[i]
+        if label != 'gold':
+            plt.plot(popStats[0][:, i], label=label)
+        else:
+            plt.plot(popStats[0][:, i]/1000, label=label)
     plt.legend()
     plt.show()
 
